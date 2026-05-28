@@ -1,7 +1,7 @@
 English
 # Forza Horizon FSD Dashboard
 
-🚗 **Bringing Tesla's FSD (Full Self-Driving) Vision Perception System into Forza Horizon!**
+🚗 **Bringing Tesla's FSD (Full Self-Driving) Vision Perception System into Forza Horizon6!**
 
 This project is a simulated dashboard based on pure computer vision and deep learning. By capturing the gameplay footage and UDP telemetry data from *Forza Horizon*, combined with OpenCV and YOLO vision models, it recreates a 3D driving visualization interface in the browser. It features spatial depth perception, lane curvature detection, and a blind-spot radar system, mimicking the real Tesla FSD experience.
 
