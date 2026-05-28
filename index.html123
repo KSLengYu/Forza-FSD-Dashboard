@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Model Y FSD Dashboard</title>
+    <style>
+        :root { --bg-color: #000; --text-main: #fff; --text-muted: #5c5c5e; --tesla-blue: #3E82F7; --warn-red: #ff3b30; --warn-yellow: #ffcc00; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-main); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; overflow: hidden; height: 100vh; width: 100vw; user-select: none; display: flex; }
+        
+        .left-panel { width: 32%; height: 100%; padding: 40px 30px; display: flex; flex-direction: column; background: linear-gradient(to right, #0a0a0c, #000000); z-index: 10; border-right: 1px solid #1a1a1c; }
+        .top-controls { width: 100%; }
+        .prnd-row { display: flex; justify-content: space-between; align-items: center; }
+        .prnd { display: flex; gap: 24px; font-size: 30px; font-weight: 700; color: var(--text-muted); }
+        .prnd span { cursor: pointer; transition: all 0.2s ease; }
+        .prnd span#gear-P:hover { color: var(--warn-red); }
+        .prnd span.active { color: var(--text-main); text-shadow: 0 0 15px rgba(255,255,255,0.5); }
+        
+        .ap-toggle-btn { font-size: 13px; font-weight: 800; color: var(--text-muted); border: 2px solid var(--text-muted); padding: 6px 12px; border-radius: 15px; cursor: pointer; transition: all 0.2s ease; letter-spacing: 1px; }
+        .ap-toggle-btn.ap-on { color: var(--text-main); background-color: var(--tesla-blue); border-color: var(--tesla-blue); box-shadow: 0 0 12px rgba(62,130,247,0.5); }
+        
+        .indicators { display: flex; gap: 15px; margin-top: 20px; }
+        .icon-svg { width: 36px; height: 36px; transition: all 0.15s ease; filter: grayscale(100%) opacity(0.2); }
+        .icon-svg.active-red { filter: grayscale(0%) opacity(1) drop-shadow(0 0 8px rgba(255,59,48,0.8)); }
+        .icon-svg.active-yellow { filter: grayscale(0%) opacity(1) drop-shadow(0 0 8px rgba(255,204,0,0.8)); }
+
+        .speed-section { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
+        .speed-val { font-size: 170px; font-weight: 600; line-height: 1; letter-spacing: -6px; }
+        .speed-unit { font-size: 20px; font-weight: 600; color: var(--text-muted); margin-top: 10px; }
+        
+        .power-bar-wrap { margin-top: 40px; height: 6px; background: #222; border-radius: 3px; overflow: hidden; width: 80%; position: relative; }
+        .power-bar { position: absolute; height: 100%; left: 0; width: 0%; background: var(--text-main); transition: width 0.05s linear; }
+        
+        .bottom-info { width: 100%; display: flex; align-items: center; justify-content: space-between; color: var(--text-muted); font-size: 18px; font-weight: 500; }
+        .ap-icon { color: var(--tesla-blue); font-size: 24px; text-shadow: 0 0 12px rgba(62,130,247,0.4); }
+        
+        .right-panel { flex-grow: 1; height: 100%; position: relative; display: flex; justify-content: center; background-color: #0b0c10; }
+        canvas { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        .ego-car-img { position: absolute; bottom: 12%; width: 220px; z-index: 5; filter: drop-shadow(0 20px 25px rgba(0,0,0,0.8)); pointer-events: none; }
+        .hidden-assets { display: none; }
+    </style>
+</head>
+<body>
+    <div class="left-panel">
+        <div class="top-controls">
+            <div class="prnd-row">
+                <div class="prnd"><span id="gear-P">P</span><span id="gear-R">R</span><span id="gear-N">N</span><span id="gear-D">D</span></div>
+                <div class="ap-toggle-btn" id="apBtn">AUTOPILOT</div>
+            </div>
+            <div class="indicators">
+                <img src="/p.svg" class="icon-svg" id="icon-p" alt="P" onerror="this.style.display='none';">
+                <img src="/abs.svg" class="icon-svg" id="icon-abs" alt="ABS" onerror="this.style.display='none';">
+                <img src="/tcs.svg" class="icon-svg" id="icon-tcs" alt="TCS" onerror="this.style.display='none';">
+            </div>
+        </div>
+        <div class="speed-section">
+            <div class="speed-val" id="speedIdx">0</div><div class="speed-unit">km/h</div>
+            <div class="power-bar-wrap"><div class="power-bar" id="rpmBar"></div></div>
+        </div>
+        <div class="bottom-info">
+            <span class="ap-icon">◎ MAX</span><span id="rpmDisplay">0 RPM</span>
+        </div>
+    </div>
+    
+    <div class="right-panel">
+        <canvas id="fsdCanvas"></canvas>
+        <img src="/car.svg" class="ego-car-img" alt="Tesla FSD Car" onerror="this.style.display='none';">
+    </div>
+
+    <div class="hidden-assets">
+        <img id="img-car-back" src="/car_back.svg">
+        <img id="img-car-side" src="/car_side.svg">
+    </div>
+
+    <script>
+        const canvas = document.getElementById('fsdCanvas');
+        const ctx = canvas.getContext('2d');
+        const imgCarBack = document.getElementById('img-car-back');
+        const imgCarSide = document.getElementById('img-car-side');
+
+        let offset = 0;
+        let telemetry = { speed: 0, rpm: 0, gearStr: "P", abs: false, tcs: false, p: true, cars: [], curve: 0, real_lane_offset: 0, steer: 0 };
+        let manualP = false, apEnabled = false;
+
+        let trackedCars = [];
+        let nextCarId = 0;
+        let smoothCurve = 0;
+        let smoothLaneOffset = 0;
+
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
+            canvas.height = canvas.parentElement.clientHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', resize); resize();
+
+        document.getElementById('apBtn').addEventListener('click', () => {
+            apEnabled = !apEnabled;
+            document.getElementById('apBtn').classList.toggle('ap-on');
+        });
+
+        document.getElementById('gear-P').addEventListener('click', () => {
+            manualP = !manualP;
+            if (manualP) { telemetry.gearStr = "P"; telemetry.speed = 0; telemetry.p = true; updateRenderData(telemetry); }
+        });
+
+        function lerp(start, end, amt) { return (1 - amt) * start + amt * end; }
+
+        function drawFSD() {
+            const w = canvas.width / window.devicePixelRatio;
+            const h = canvas.height / window.devicePixelRatio;
+            ctx.clearRect(0, 0, w, h);
+            
+            if (telemetry.speed > 0 && !manualP) {
+                offset += (telemetry.speed * 0.15);
+                if (offset > 200) offset = 0;
+            }
+            
+            // 将真实道路曲率作为主基调，摒弃方向盘带来的画面摇摆
+            smoothCurve = lerp(smoothCurve, telemetry.curve, 0.08);
+            smoothLaneOffset = lerp(smoothLaneOffset, telemetry.real_lane_offset, 0.1);
+
+            const horizonY = h * 0.4;
+            const carFrontY = h * 0.72; 
+            
+            let baseCenterX = w * 0.5 + (smoothLaneOffset * w * 0.2); 
+            let curveOffset = smoothCurve * w * 0.5;
+            let vpX = w * 0.5 + curveOffset;
+
+            // 绘制深色路基
+            ctx.beginPath(); 
+            ctx.moveTo(baseCenterX - w * 0.65, h); 
+            ctx.quadraticCurveTo(baseCenterX - w * 0.3 + curveOffset * 0.5, horizonY + (h-horizonY)*0.5, vpX - w * 0.15, horizonY);
+            ctx.lineTo(vpX + w * 0.15, horizonY);
+            ctx.quadraticCurveTo(baseCenterX + w * 0.3 + curveOffset * 0.5, horizonY + (h-horizonY)*0.5, baseCenterX + w * 0.65, h);
+            ctx.closePath();
+            
+            let roadGrad = ctx.createLinearGradient(w*0.5, horizonY, w*0.5, h);
+            roadGrad.addColorStop(0, '#0b0c0e'); roadGrad.addColorStop(1, '#111317');
+            ctx.fillStyle = roadGrad; ctx.fill();
+
+            // ========================================================
+            // 实体道路边缘线 (粗白线)，增加路面扎实感
+            // ========================================================
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(baseCenterX - w * 0.65, h); ctx.quadraticCurveTo(baseCenterX - w * 0.3 + curveOffset * 0.5, horizonY + (h-horizonY)*0.5, vpX - w * 0.15, horizonY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(baseCenterX + w * 0.65, h); ctx.quadraticCurveTo(baseCenterX + w * 0.3 + curveOffset * 0.5, horizonY + (h-horizonY)*0.5, vpX + w * 0.15, horizonY); ctx.stroke();
+
+            // ========================================================
+            // 三次贝塞尔曲线：完美的 AP 蓝线！
+            // 保证车头出来的第一段绝对是直的，然后才平滑弯曲！
+            // ========================================================
+            if (apEnabled) {
+                // 根据方向盘微调引导线的远端落点，展现意图，但不扭曲车头部分
+                let intentVpX = vpX + (telemetry.steer * w * 0.15); 
+
+                ctx.beginPath(); 
+                ctx.moveTo(baseCenterX - 40, carFrontY); 
+                ctx.bezierCurveTo(
+                    baseCenterX - 40, carFrontY - 80, // 控制点1：保证笔直向前
+                    intentVpX - 12, horizonY + 50,    // 控制点2：向转弯点牵引
+                    intentVpX - 12, horizonY          // 终点
+                );
+                ctx.lineTo(intentVpX + 12, horizonY);
+                ctx.bezierCurveTo(
+                    intentVpX + 12, horizonY + 50,    
+                    baseCenterX + 40, carFrontY - 80, 
+                    baseCenterX + 40, carFrontY
+                );
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(62, 130, 247, 0.18)'; ctx.fill();
+                
+                ctx.strokeStyle = '#3E82F7'; ctx.lineWidth = 3; ctx.shadowColor = '#3E82F7'; ctx.shadowBlur = 10;
+                ctx.beginPath(); ctx.moveTo(baseCenterX - 40, carFrontY); ctx.bezierCurveTo(baseCenterX - 40, carFrontY - 80, intentVpX - 12, horizonY + 50, intentVpX - 12, horizonY); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(baseCenterX + 40, carFrontY); ctx.bezierCurveTo(baseCenterX + 40, carFrontY - 80, intentVpX + 12, horizonY + 50, intentVpX + 12, horizonY); ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            // 中间密集的虚线路标
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 2;
+            for (let i = 0; i < 25; i++) { // 加密了虚线数量
+                let yPos = (i * 24 + offset) % 600; let t = yPos / 600; 
+                let drawY = horizonY + (h - horizonY) * Math.pow(t, 2); 
+                let length = 8 + 30 * t;
+                if (drawY > h) continue;
+                
+                let control_t = 1 - t; 
+                let bezierX_center = Math.pow(1-control_t, 2) * baseCenterX + 2*(1-control_t)*control_t * (baseCenterX + curveOffset*0.5) + Math.pow(control_t, 2) * vpX;
+                
+                let curWidth = w * 0.15 + (w * 0.5) * Math.pow(t, 2);
+                
+                ctx.beginPath(); ctx.moveTo(bezierX_center - curWidth/3, drawY); ctx.lineTo(bezierX_center - curWidth/3 - 10 * t, drawY + length); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(bezierX_center + curWidth/3, drawY); ctx.lineTo(bezierX_center + curWidth/3 + 10 * t, drawY + length); ctx.stroke();
+            }
+
+            // ========================================================
+            // 车辆高容错追踪 (专抓高速移动目标)
+            // ========================================================
+            trackedCars.forEach(c => c.updated = false);
+
+            if (telemetry.cars && telemetry.cars.length > 0) {
+                telemetry.cars.forEach(incomingCar => {
+                    let bestMatch = null; let bestDist = 999;
+                    trackedCars.forEach(tc => {
+                        // 【核心修改】将距离阈值扩大到了 1.5，允许目标一帧内发生大位移而不丢失
+                        let d = Math.hypot(tc.curDist - incomingCar.distance, tc.curOffset - incomingCar.offset);
+                        if (d < 1.5 && d < bestDist && !tc.updated) { bestMatch = tc; bestDist = d; }
+                    });
+
+                    if (bestMatch) {
+                        bestMatch.targetDist = incomingCar.distance; bestMatch.targetOffset = incomingCar.offset;
+                        bestMatch.orientation = incomingCar.orientation; 
+                        bestMatch.updated = true; bestMatch.framesLost = 0;
+                    } else {
+                        trackedCars.push({
+                            id: nextCarId++,
+                            curDist: incomingCar.distance, curOffset: incomingCar.offset,
+                            targetDist: incomingCar.distance, targetOffset: incomingCar.offset,
+                            orientation: incomingCar.orientation,
+                            updated: true, framesLost: 0
+                        });
+                    }
+                });
+            }
+
+            trackedCars.forEach(tc => {
+                if (!tc.updated) { tc.framesLost++; tc.targetDist = 0; }
+                tc.curDist = lerp(tc.curDist, tc.targetDist, 0.1);
+                tc.curOffset = lerp(tc.curOffset, tc.targetOffset, 0.1);
+
+                // 放宽到丢失 30 帧才完全透明消失，消除闪烁感
+                let alpha = Math.max(0, 1 - (tc.framesLost * 0.033));
+
+                if (alpha > 0.05) {
+                    let targetY = horizonY + (carFrontY - horizonY) * tc.curDist;
+                    let scale = 0.2 + (1.3 * tc.curDist); 
+                    let boxW = 120 * scale; let boxH = 120 * scale; 
+                    
+                    let baseVpX = w * 0.5 + (smoothCurve * w * 0.35 * (1 - Math.pow(tc.curDist, 2)));
+                    let targetX = baseVpX + (tc.curOffset * (w * 0.4) * scale);
+
+                    ctx.globalAlpha = alpha;
+                    let activeImg = tc.orientation === 'side' ? imgCarSide : imgCarBack;
+                    if (activeImg && activeImg.complete) {
+                        ctx.drawImage(activeImg, targetX - boxW/2, targetY - boxH, boxW, boxH);
+                    }
+                    ctx.globalAlpha = 1.0;
+
+                    if (apEnabled && Math.abs(tc.curOffset) < 0.2 && tc.curDist > 0.3) {
+                        ctx.strokeStyle = `rgba(62, 130, 247, ${alpha})`; ctx.lineWidth = 3;
+                        ctx.strokeRect(targetX - boxW/2, targetY - boxH, boxW, boxH);
+                    }
+                }
+            });
+
+            // 丢帧容忍度提高到 40 帧
+            trackedCars = trackedCars.filter(tc => tc.framesLost < 40);
+            requestAnimationFrame(drawFSD);
+        }
+        drawFSD();
+
+        function updateRenderData(data) {
+            if (data.speed > 2 && manualP) { manualP = false; }
+            document.getElementById('speedIdx').innerText = manualP ? 0 : data.speed;
+            document.getElementById('rpmDisplay').innerText = data.rpm + ' RPM';
+            document.getElementById('rpmBar').style.width = Math.min((data.rpm / 8500) * 100, 100) + '%';
+            
+            document.querySelectorAll('.prnd span').forEach(el => el.classList.remove('active'));
+            const gearEl = document.getElementById('gear-' + (manualP ? "P" : data.gearStr));
+            if (gearEl) gearEl.classList.add('active');
+
+            let displayP = manualP ? true : data.p;
+            document.getElementById('icon-p').className = displayP ? 'icon-svg active-red' : 'icon-svg';
+            document.getElementById('icon-abs').className = data.abs ? 'icon-svg active-yellow' : 'icon-svg';
+            document.getElementById('icon-tcs').className = data.tcs ? 'icon-svg active-yellow' : 'icon-svg';
+        }
+
+        const evtSource = new EventSource('/stream');
+        evtSource.onmessage = function(e) {
+            telemetry = JSON.parse(e.data);
+            updateRenderData(telemetry);
+        };
+    </script>
+</body>
+</html>
