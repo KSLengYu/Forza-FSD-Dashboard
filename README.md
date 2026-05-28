@@ -1,6 +1,6 @@
 # Forza Horizon FSD Dashboard (地平线特斯拉 FSD 驾驶仪表盘)
 
-🚗 **将特斯拉 FSD (Full Self-Driving) 的视觉感知系统搬进《极限竞速：地平线》！**
+🚗 **将特斯拉 FSD (Full Self-Driving) 的视觉感知系统搬进《极限竞速：地平线6》！**
 
 This project is a simulated dashboard based on pure computer vision and deep learning. By capturing the gameplay footage and UDP telemetry data from *Forza Horizon*, combined with OpenCV and YOLO vision models, it recreates a 3D driving visualization interface in the browser, featuring spatial depth perception, lane curvature detection, and a blind-spot radar system that mimics the Tesla FSD experience.
 
