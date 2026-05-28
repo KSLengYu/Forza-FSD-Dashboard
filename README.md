@@ -1,3 +1,40 @@
+English
+# Forza Horizon FSD Dashboard
+
+🚗 **Bringing Tesla's FSD (Full Self-Driving) Vision Perception System into Forza Horizon!**
+
+This project is a simulated dashboard based on pure computer vision and deep learning. By capturing the gameplay footage and UDP telemetry data from *Forza Horizon*, combined with OpenCV and YOLO vision models, it recreates a 3D driving visualization interface in the browser. It features spatial depth perception, lane curvature detection, and a blind-spot radar system, mimicking the real Tesla FSD experience.
+
+## ✨ Features
+* **UDP & Physics Fusion**: Real-time extraction of speed, RPM, gear, pedal status, and steering wheel angle to eliminate high-frequency visual jitter.
+* **BEV (Bird's Eye View) Perception**: Maps the 2D gameplay footage to a top-down view via Inverse Perspective Mapping (IPM) to extract accurate physical lane curvature and ego-vehicle offset.
+* **Anti-Distortion YOLO Tracking**: Utilizes NPU/GPU for real-time leading vehicle detection. An original "tire-grounding depth algorithm" ensures that rendering background vehicles in the front-end scales proportionally, entirely eliminating visual stretching/distortion.
+* **Holographic Sonar Radar**: Uses OpenCV to capture the in-game blind-spot radar, transforming it into a front-end 3D pulsating sonar wave synced with the vehicle's heading.
+
+## 🛠️ Tech Stack
+* **Back-end**: Python, OpenCV, OpenVINO (YOLOv8 NPU Inference), socket, DXcam
+* **Front-end**: HTML5 Canvas, Vanilla JavaScript, SSE (Server-Sent Events)
+
+## 🚀 How to Run
+1. Install dependencies: `pip install opencv-python dxcam ultralytics openvino`
+2. Prepare the model: Run `yolo export model=yolov8s.pt format=openvino` in the root directory to generate the NPU-accelerated model.
+3. Start the backend: Run `python server.py` in your terminal.
+4. Open the dashboard: Visit `http://localhost:8000` in your browser (Supports local network access via iPad).
+
+## 🆘 Help Wanted!
+Currently, the project struggles with traditional OpenCV lane detection on unpaved roads (dirt, gravel). 
+I have successfully tested `yolov8n-seg.pt` (pixel-level segmentation), but I currently lack an efficient Python matrix processing logic to extract the AI's "Drivable Area Mask" and convert it into front-end Bezier curve coordinates. PRs and optimization ideas from the community are highly welcome!
+
+---
+
+## ⚠️ Disclaimer & Copyright
+1. **Educational & Entertainment Purposes Only**: This project is strictly a programming learning exercise for Computer Vision (CV), Deep Learning, and Front-end rendering. **It DOES NOT represent real-world autonomous driving or ADAS technologies.** Please do not apply this to any real driving scenarios.
+2. **Copyright (Take Down on Request)**: The vehicle texture model (Tesla Car Model) and certain UI elements used in the front-end display are inspired by Tesla, Inc. **This is a non-commercial, personal open-source toy and is not officially affiliated with Tesla.**
+3. **Takedown Policy**: If you are the copyright owner of any models/assets and believe this project infringes upon your rights, please submit an Issue or contact me. I will remove the related files and code immediately upon notification.
+
+
+
+Chinese
 # Forza Horizon FSD Dashboard (地平线纯视觉自动驾驶仪表盘)
 
 🚗 **将特斯拉 FSD (Full Self-Driving) 的视觉感知系统搬进《极限竞速：地平线6》！**
